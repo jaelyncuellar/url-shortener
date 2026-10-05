@@ -1,11 +1,17 @@
+# Snip — URL Shortener
 
-  # Scalable URL Shortener
+A minimal, clean demo of a URL shortener. Shorten links, track clicks, and
+browse simple analytics.
 
-  This is a code bundle for Scalable URL Shortener. The original project is available at https://www.figma.com/design/2CjkoGFEWTvAyqUOs4WOQu/Scalable-URL-Shortener.
+## Demo login
 
-  ## Running the code
+The login form is pre-filled with the demo account — just hit **Sign in**:
 
-  Run `npm i` to install the dependencies.
+- Email: `test@gmail.com`
+- Password: `test`
 
-  Run `npm run dev` to start the development server.
-  # url-shortener
+## Running the code
+
+Run `npm i` to install the dependencies.
+
+Run `npm run dev` to start the development server.

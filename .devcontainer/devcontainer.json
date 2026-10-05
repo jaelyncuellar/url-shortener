@@ -1,0 +1,1 @@
+{"customizations":{"vscode":{"extensions":["ms-dotnettools.csharp"]}},"features":{"ghcr.io/devcontainers/features/docker-in-docker:2":{}},"forwardPorts":[8080],"image":"mcr.microsoft.com/devcontainers/dotnet:1-8.0","name":"Snip","portsAttributes":{"8080":{"label":"Snip API","onAutoForward":"notify"}},"postCreateCommand":"cd backend && docker compose up -d"}

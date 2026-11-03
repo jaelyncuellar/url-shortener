@@ -1,4 +1,12 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 import {
   Area,
   AreaChart,
@@ -22,71 +30,63 @@ import {
   X,
 } from "lucide-react";
 import { Toaster, toast } from "sonner";
+import {
+  analyticsClicks,
+  analyticsSummary,
+  clearSession,
+  createLink,
+  deleteLink,
+  fetchMe,
+  getStoredUser,
+  getToken,
+  listLinks,
+  login,
+  register,
+  setLinkActive,
+  type AnalyticsSummary,
+  type ApiLink,
+  type ApiUser,
+} from "./api";
 
 // ─── Demo access ────────────────────────────────────────────────────────────
-// The demo account is intentionally trivial so anyone can try the app.
+// Seeded by the backend (see backend DbSeeder) so anyone can try the app.
 const DEMO_EMAIL = "test@gmail.com";
 const DEMO_PASSWORD = "test";
-const DOMAIN = "snip.dev";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 type View = "dashboard" | "links" | "analytics" | "settings";
 
 interface ShortLink {
-  id: number;
+  id: string;
   slug: string;
   originalUrl: string;
+  shortUrl: string;
   clicks: number;
   created: string;
   active: boolean;
 }
 
-// ─── Mock data ──────────────────────────────────────────────────────────────
+function toUiLink(l: ApiLink): ShortLink {
+  return {
+    id: l.id,
+    slug: l.slug,
+    originalUrl: l.destinationUrl,
+    shortUrl: l.shortUrl,
+    clicks: l.clicks,
+    created: new Date(l.createdAt).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }),
+    active: l.isActive,
+  };
+}
 
-const INITIAL_LINKS: ShortLink[] = [
-  { id: 1, slug: "gh-release", originalUrl: "https://github.com/dotnet/aspnetcore/releases/tag/v8.0.0", clicks: 24817, created: "2026-05-01", active: true },
-  { id: 2, slug: "api-docs", originalUrl: "https://learn.microsoft.com/en-us/aspnet/core/fundamentals/minimal-apis", clicks: 18432, created: "2026-05-10", active: true },
-  { id: 3, slug: "redis-guide", originalUrl: "https://redis.io/docs/manual/patterns/distributed-locks/", clicks: 9241, created: "2026-05-15", active: true },
-  { id: 4, slug: "pg-perf", originalUrl: "https://www.postgresql.org/docs/current/performance-tips.html", clicks: 7833, created: "2026-05-20", active: true },
-  { id: 5, slug: "jwt-rfc", originalUrl: "https://www.rfc-editor.org/rfc/rfc7519", clicks: 5129, created: "2026-05-22", active: false },
-  { id: 6, slug: "k8s-deploy", originalUrl: "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/", clicks: 2741, created: "2026-06-05", active: true },
-];
-
-const CLICK_HISTORY = (() => {
-  const base = new Date("2026-06-22");
-  return Array.from({ length: 30 }, (_, i) => {
-    const d = new Date(base);
-    d.setDate(d.getDate() - (29 - i));
-    const v = 2200 + Math.sin(i * 0.35 + 1) * 700 + (Math.random() - 0.5) * 300;
-    return {
-      date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      clicks: Math.round(v),
-    };
-  });
-})();
-
-const DEVICE_DATA = [
-  { name: "Desktop", value: 54 },
-  { name: "Mobile", value: 34 },
-  { name: "Tablet", value: 12 },
-];
-
-const COUNTRY_DATA = [
-  { code: "US", clicks: 38420 },
-  { code: "DE", clicks: 18230 },
-  { code: "GB", clicks: 14870 },
-  { code: "IN", clicks: 12540 },
-  { code: "CA", clicks: 9820 },
-];
-
-const REFERRER_DATA = [
-  { source: "Direct", clicks: 41200 },
-  { source: "github.com", clicks: 28340 },
-  { source: "twitter.com", clicks: 19870 },
-  { source: "news.ycombinator.com", clicks: 14230 },
-  { source: "reddit.com", clicks: 11590 },
-];
+/** "http://localhost:8080/gh-release" → "localhost:8080/gh-release" */
+function displayShort(link: ShortLink): string {
+  return link.shortUrl.replace(/^https?:\/\//, "");
+}
 
 // ─── Small building blocks ──────────────────────────────────────────────────
 
@@ -159,25 +159,32 @@ const inputClass =
 
 // ─── Auth ───────────────────────────────────────────────────────────────────
 
-function AuthScreen({ onAuth }: { onAuth: () => void }) {
+function AuthScreen({ onAuth }: { onAuth: (user: ApiUser) => void }) {
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState(DEMO_EMAIL);
   const [password, setPassword] = useState(DEMO_PASSWORD);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const user =
+        mode === "login"
+          ? await login(email.trim(), password)
+          : await register(email.trim(), password, name.trim());
+      toast.success(mode === "login" ? "Signed in — welcome back" : "Account created — welcome");
+      onAuth(user);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Something went wrong. Is the backend running?"
+      );
+    } finally {
       setLoading(false);
-      if (email.trim() === DEMO_EMAIL && password === DEMO_PASSWORD) {
-        toast.success("Signed in — welcome back");
-        onAuth();
-      } else {
-        setError("That doesn't match the demo account. Try the pre-filled credentials.");
-      }
-    }, 700);
+    }
   };
 
   return (
@@ -187,9 +194,21 @@ function AuthScreen({ onAuth }: { onAuth: () => void }) {
           <Brand size={40} />
         </div>
         <Card className="p-8">
-          <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
+          <h1 className="text-xl font-semibold tracking-tight">
+            {mode === "login" ? "Sign in" : "Create account"}
+          </h1>
           <p className="mt-1 text-sm text-neutral-500">Shorten links in seconds.</p>
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+            {mode === "register" && (
+              <Field label="Name">
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Your name"
+                  className={inputClass}
+                />
+              </Field>
+            )}
             <Field label="Email">
               <input
                 type="email"
@@ -214,19 +233,56 @@ function AuthScreen({ onAuth }: { onAuth: () => void }) {
               disabled={loading}
               className="w-full rounded-lg bg-neutral-900 py-2.5 text-sm font-medium text-white transition-opacity hover:bg-neutral-700 disabled:opacity-60"
             >
-              {loading ? "Signing in…" : "Sign in"}
+              {loading
+                ? mode === "login"
+                  ? "Signing in…"
+                  : "Creating account…"
+                : mode === "login"
+                  ? "Sign in"
+                  : "Create account"}
             </button>
           </form>
-        </Card>
-        <div className="mt-4 rounded-xl border border-dashed border-neutral-300 bg-white/60 p-4 text-center">
-          <p className="text-xs font-medium text-neutral-700">Demo account</p>
-          <p className="mt-1 text-xs text-neutral-500">
-            <span className="font-mono">{DEMO_EMAIL}</span>
-            {" · "}
-            <span className="font-mono">{DEMO_PASSWORD}</span>
+          <p className="mt-4 text-center text-xs text-neutral-500">
+            {mode === "login" ? (
+              <>
+                New here?{" "}
+                <button
+                  onClick={() => {
+                    setMode("register");
+                    setError("");
+                  }}
+                  className="font-medium text-neutral-900 hover:underline"
+                >
+                  Create an account
+                </button>
+              </>
+            ) : (
+              <>
+                Already have an account?{" "}
+                <button
+                  onClick={() => {
+                    setMode("login");
+                    setError("");
+                  }}
+                  className="font-medium text-neutral-900 hover:underline"
+                >
+                  Sign in
+                </button>
+              </>
+            )}
           </p>
-          <p className="mt-1 text-xs text-neutral-400">It's already filled in — just hit sign in.</p>
-        </div>
+        </Card>
+        {mode === "login" && (
+          <div className="mt-4 rounded-xl border border-dashed border-neutral-300 bg-white/60 p-4 text-center">
+            <p className="text-xs font-medium text-neutral-700">Demo account</p>
+            <p className="mt-1 text-xs text-neutral-500">
+              <span className="font-mono">{DEMO_EMAIL}</span>
+              {" · "}
+              <span className="font-mono">{DEMO_PASSWORD}</span>
+            </p>
+            <p className="mt-1 text-xs text-neutral-400">It's already filled in — just hit sign in.</p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -244,10 +300,12 @@ const NAV: { id: View; label: string; icon: typeof Link2 }[] = [
 function TopNav({
   view,
   setView,
+  user,
   onLogout,
 }: {
   view: View;
   setView: (v: View) => void;
+  user: ApiUser;
   onLogout: () => void;
 }) {
   return (
@@ -273,7 +331,7 @@ function TopNav({
           ))}
         </nav>
         <div className="flex items-center gap-2">
-          <span className="hidden text-xs text-neutral-500 sm:block">{DEMO_EMAIL}</span>
+          <span className="hidden text-xs text-neutral-500 sm:block">{user.email}</span>
           <button
             onClick={onLogout}
             title="Sign out"
@@ -301,15 +359,18 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub: st
 
 function DashboardView({
   links,
+  summary,
   goLinks,
   onNewLink,
 }: {
   links: ShortLink[];
+  summary: AnalyticsSummary | null;
   goLinks: () => void;
   onNewLink: () => void;
 }) {
-  const totalClicks = links.reduce((s, l) => s + l.clicks, 0);
-  const active = links.filter((l) => l.active).length;
+  const totalLinks = summary?.totalLinks ?? links.length;
+  const active = summary?.activeLinks ?? links.filter((l) => l.active).length;
+  const totalClicks = summary?.totalClicks ?? links.reduce((s, l) => s + l.clicks, 0);
 
   return (
     <div className="space-y-6">
@@ -333,11 +394,11 @@ function DashboardView({
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Total links" value={links.length.toString()} sub={`${active} active`} />
+        <StatCard label="Total links" value={totalLinks.toString()} sub={`${active} active`} />
         <StatCard label="Total clicks" value={totalClicks.toLocaleString()} sub="All time" />
         <StatCard
           label="Avg. clicks per link"
-          value={links.length ? Math.round(totalClicks / links.length).toLocaleString() : "0"}
+          value={totalLinks ? Math.round(totalClicks / totalLinks).toLocaleString() : "0"}
           sub="All time"
         />
       </div>
@@ -361,7 +422,7 @@ function DashboardView({
               <div key={link.id} className="flex items-center justify-between px-5 py-3.5">
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-mono text-sm text-neutral-900">
-                    {DOMAIN}/{link.slug}
+                    {displayShort(link)}
                   </p>
                   <p className="mt-0.5 truncate text-xs text-neutral-400">{link.originalUrl}</p>
                 </div>
@@ -370,6 +431,11 @@ function DashboardView({
                 </span>
               </div>
             ))}
+          {links.length === 0 && (
+            <p className="px-5 py-8 text-center text-sm text-neutral-400">
+              No links yet — create your first one.
+            </p>
+          )}
         </div>
       </Card>
     </div>
@@ -379,20 +445,32 @@ function DashboardView({
 // ─── Links ──────────────────────────────────────────────────────────────────
 
 function NewLinkModal({
+  shortBase,
   onClose,
   onCreate,
 }: {
+  shortBase: string;
   onClose: () => void;
-  onCreate: (url: string, slug: string) => void;
+  onCreate: (url: string, slug: string) => Promise<void>;
 }) {
   const [url, setUrl] = useState("");
   const [slug, setSlug] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!url.trim()) return;
-    onCreate(url.trim(), slug.trim() || Math.random().toString(36).slice(2, 8));
-    onClose();
+    if (!url.trim() || saving) return;
+    setError("");
+    setSaving(true);
+    try {
+      await onCreate(url.trim(), slug.trim());
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create the link.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -428,16 +506,19 @@ function NewLinkModal({
           <Field label="Custom alias (optional)">
             <div className="flex items-center overflow-hidden rounded-lg border border-neutral-200 focus-within:border-neutral-900">
               <span className="shrink-0 border-r border-neutral-200 bg-neutral-50 px-3 py-2.5 font-mono text-sm text-neutral-500">
-                {DOMAIN}/
+                {shortBase}/
               </span>
               <input
                 value={slug}
-                onChange={(e) => setSlug(e.target.value.replace(/[^a-z0-9-]/g, ""))}
+                onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
                 placeholder="my-link"
                 className="w-full px-3 py-2.5 font-mono text-sm focus:outline-none"
               />
             </div>
           </Field>
+          {error && (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>
+          )}
           <div className="flex gap-3 pt-1">
             <button
               type="button"
@@ -448,9 +529,10 @@ function NewLinkModal({
             </button>
             <button
               type="submit"
-              className="flex-1 rounded-lg bg-neutral-900 py-2.5 text-sm font-medium text-white hover:bg-neutral-700"
+              disabled={saving}
+              className="flex-1 rounded-lg bg-neutral-900 py-2.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-60"
             >
-              Create link
+              {saving ? "Creating…" : "Create link"}
             </button>
           </div>
         </form>
@@ -461,45 +543,41 @@ function NewLinkModal({
 
 function LinksView({
   links,
-  setLinks,
+  total,
+  query,
+  setQuery,
   showModal,
   setShowModal,
+  shortBase,
+  onCreate,
+  onToggle,
+  onDelete,
 }: {
   links: ShortLink[];
-  setLinks: React.Dispatch<React.SetStateAction<ShortLink[]>>;
+  total: number;
+  query: string;
+  setQuery: (q: string) => void;
   showModal: boolean;
   setShowModal: (v: boolean) => void;
+  shortBase: string;
+  onCreate: (url: string, slug: string) => Promise<void>;
+  onToggle: (link: ShortLink) => void;
+  onDelete: (link: ShortLink) => void;
 }) {
-  const [search, setSearch] = useState("");
-
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return links.filter(
-      (l) => l.slug.toLowerCase().includes(q) || l.originalUrl.toLowerCase().includes(q)
-    );
-  }, [links, search]);
-
-  const handleCreate = (url: string, slug: string) => {
-    const newLink: ShortLink = {
-      id: Date.now(),
-      slug,
-      originalUrl: url,
-      clicks: 0,
-      created: new Date().toISOString().split("T")[0],
-      active: true,
-    };
-    setLinks((prev) => [newLink, ...prev]);
-    toast.success(`Created ${DOMAIN}/${slug}`);
-  };
-
   return (
     <>
-      {showModal && <NewLinkModal onClose={() => setShowModal(false)} onCreate={handleCreate} />}
+      {showModal && (
+        <NewLinkModal
+          shortBase={shortBase}
+          onClose={() => setShowModal(false)}
+          onCreate={onCreate}
+        />
+      )}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Links</h1>
-            <p className="mt-0.5 text-sm text-neutral-500">{links.length} total</p>
+            <p className="mt-0.5 text-sm text-neutral-500">{total} total</p>
           </div>
           <button
             onClick={() => setShowModal(true)}
@@ -512,8 +590,8 @@ function LinksView({
         <div className="relative">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
           <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
             placeholder="Search links…"
             className={`${inputClass} pl-9`}
           />
@@ -521,14 +599,19 @@ function LinksView({
 
         <Card>
           <div className="divide-y divide-neutral-100">
-            {filtered.map((link) => (
+            {links.map((link) => (
               <div key={link.id} className="flex items-center gap-4 px-5 py-4">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1">
-                    <p className={`truncate font-mono text-sm ${link.active ? "text-neutral-900" : "text-neutral-400 line-through"}`}>
-                      {DOMAIN}/{link.slug}
-                    </p>
-                    <CopyButton text={`https://${DOMAIN}/${link.slug}`} />
+                    <a
+                      href={link.shortUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`truncate font-mono text-sm hover:underline ${link.active ? "text-neutral-900" : "text-neutral-400 line-through"}`}
+                    >
+                      {displayShort(link)}
+                    </a>
+                    <CopyButton text={link.shortUrl} />
                   </div>
                   <div className="mt-0.5 flex items-center gap-1">
                     <p className="truncate text-xs text-neutral-400">{link.originalUrl}</p>
@@ -542,23 +625,14 @@ function LinksView({
                       <ExternalLink size={12} />
                     </a>
                   </div>
+                  <p className="mt-0.5 text-[11px] text-neutral-300">Created {link.created}</p>
                 </div>
                 <span className="hidden w-20 shrink-0 text-right text-sm text-neutral-600 sm:block">
                   {link.clicks.toLocaleString()}
                 </span>
-                <Toggle
-                  on={link.active}
-                  onChange={() =>
-                    setLinks((prev) =>
-                      prev.map((l) => (l.id === link.id ? { ...l, active: !l.active } : l))
-                    )
-                  }
-                />
+                <Toggle on={link.active} onChange={() => onToggle(link)} />
                 <button
-                  onClick={() => {
-                    setLinks((prev) => prev.filter((l) => l.id !== link.id));
-                    toast.success("Link deleted");
-                  }}
+                  onClick={() => onDelete(link)}
                   title="Delete"
                   className="shrink-0 rounded-md p-1.5 text-neutral-300 transition-colors hover:bg-red-50 hover:text-red-600"
                 >
@@ -566,9 +640,9 @@ function LinksView({
                 </button>
               </div>
             ))}
-            {filtered.length === 0 && (
+            {links.length === 0 && (
               <p className="px-5 py-12 text-center text-sm text-neutral-400">
-                {search ? `No links match "${search}".` : "No links yet — create your first one."}
+                {query ? `No links match "${query}".` : "No links yet — create your first one."}
               </p>
             )}
           </div>
@@ -584,8 +658,8 @@ function BreakdownBar({ label, value, max }: { label: string; value: number; max
   return (
     <div>
       <div className="mb-1 flex items-center justify-between text-xs">
-        <span className="text-neutral-500">{label}</span>
-        <span className="font-medium text-neutral-800">{value.toLocaleString()}</span>
+        <span className="truncate text-neutral-500">{label}</span>
+        <span className="ml-2 shrink-0 font-medium text-neutral-800">{value.toLocaleString()}</span>
       </div>
       <div className="h-1.5 w-full rounded-full bg-neutral-100">
         <div
@@ -598,87 +672,115 @@ function BreakdownBar({ label, value, max }: { label: string; value: number; max
 }
 
 function AnalyticsView() {
-  const totalClicks = CLICK_HISTORY.reduce((s, d) => s + d.clicks, 0);
+  const [series, setSeries] = useState<{ date: string; clicks: number }[]>([]);
+  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [clicks, sum] = await Promise.all([analyticsClicks(30), analyticsSummary()]);
+        if (cancelled) return;
+        setSeries(
+          clicks.map((d) => ({
+            date: new Date(`${d.date}T12:00:00`).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+            }),
+            clicks: d.clicks,
+          }))
+        );
+        setSummary(sum);
+      } catch {
+        if (!cancelled) toast.error("Could not load analytics.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const windowClicks = series.reduce((s, d) => s + d.clicks, 0);
+  const top = summary?.topLinks ?? [];
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Analytics</h1>
         <p className="mt-0.5 text-sm text-neutral-500">
-          Last 30 days · {totalClicks.toLocaleString()} clicks
+          Last 30 days · {windowClicks.toLocaleString()} clicks
+          {summary ? ` · ${summary.totalClicks.toLocaleString()} all time` : ""}
         </p>
       </div>
 
       <Card className="p-5">
         <h2 className="mb-4 text-sm font-medium">Clicks over time</h2>
-        <ResponsiveContainer width="100%" height={240}>
-          <AreaChart data={CLICK_HISTORY} margin={{ top: 0, right: 0, left: -18, bottom: 0 }}>
-            <defs>
-              <linearGradient id="clicks" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#171717" stopOpacity={0.15} />
-                <stop offset="95%" stopColor="#171717" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-            <XAxis
-              dataKey="date"
-              tick={{ fontSize: 11, fill: "#a3a3a3" }}
-              tickLine={false}
-              axisLine={false}
-              interval={4}
-            />
-            <YAxis tick={{ fontSize: 11, fill: "#a3a3a3" }} tickLine={false} axisLine={false} />
-            <Tooltip
-              contentStyle={{
-                borderRadius: 8,
-                border: "1px solid #e5e5e5",
-                fontSize: 12,
-                boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
-              }}
-            />
-            <Area type="monotone" dataKey="clicks" stroke="#171717" strokeWidth={2} fill="url(#clicks)" />
-          </AreaChart>
-        </ResponsiveContainer>
+        {loading ? (
+          <p className="py-16 text-center text-sm text-neutral-400">Loading…</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={240}>
+            <AreaChart data={series} margin={{ top: 0, right: 0, left: -18, bottom: 0 }}>
+              <defs>
+                <linearGradient id="clicks" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#171717" stopOpacity={0.15} />
+                  <stop offset="95%" stopColor="#171717" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 11, fill: "#a3a3a3" }}
+                tickLine={false}
+                axisLine={false}
+                interval={4}
+              />
+              <YAxis tick={{ fontSize: 11, fill: "#a3a3a3" }} tickLine={false} axisLine={false} />
+              <Tooltip
+                contentStyle={{
+                  borderRadius: 8,
+                  border: "1px solid #e5e5e5",
+                  fontSize: 12,
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
+                }}
+              />
+              <Area type="monotone" dataKey="clicks" stroke="#171717" strokeWidth={2} fill="url(#clicks)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
       </Card>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <Card className="p-5">
-          <h2 className="mb-4 text-sm font-medium">Devices</h2>
-          <div className="space-y-4">
-            {DEVICE_DATA.map((d) => (
-              <BreakdownBar key={d.name} label={d.name} value={d.value} max={100} />
-            ))}
-          </div>
-          <p className="mt-3 text-[11px] text-neutral-400">Share of clicks, in %</p>
-        </Card>
-        <Card className="p-5">
-          <h2 className="mb-4 text-sm font-medium">Top countries</h2>
-          <div className="space-y-4">
-            {COUNTRY_DATA.map((c) => (
-              <BreakdownBar key={c.code} label={c.code} value={c.clicks} max={COUNTRY_DATA[0].clicks} />
-            ))}
-          </div>
-        </Card>
-        <Card className="p-5">
-          <h2 className="mb-4 text-sm font-medium">Top referrers</h2>
-          <div className="space-y-4">
-            {REFERRER_DATA.map((r) => (
-              <BreakdownBar key={r.source} label={r.source} value={r.clicks} max={REFERRER_DATA[0].clicks} />
-            ))}
-          </div>
-        </Card>
-      </div>
+      <Card className="p-5">
+        <h2 className="mb-4 text-sm font-medium">Top links by clicks</h2>
+        <div className="space-y-4">
+          {top.map((l) => (
+            <BreakdownBar
+              key={l.slug}
+              label={l.slug}
+              value={l.clicks}
+              max={top[0]?.clicks ?? 1}
+            />
+          ))}
+          {!loading && top.length === 0 && (
+            <p className="text-sm text-neutral-400">No links yet.</p>
+          )}
+        </div>
+      </Card>
     </div>
   );
 }
 
 // ─── Settings ───────────────────────────────────────────────────────────────
 
-function SettingsView({ onLogout }: { onLogout: () => void }) {
-  const [name, setName] = useState("Demo User");
-  const [email, setEmail] = useState(DEMO_EMAIL);
-  const [notifications, setNotifications] = useState(true);
-  const [weeklyDigest, setWeeklyDigest] = useState(false);
+function SettingsView({ user, onLogout }: { user: ApiUser; onLogout: () => void }) {
+  const [notifications, setNotifications] = useState(
+    () => localStorage.getItem("snip_pref_alerts") !== "off"
+  );
+  const [weeklyDigest, setWeeklyDigest] = useState(
+    () => localStorage.getItem("snip_pref_digest") === "on"
+  );
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -691,18 +793,13 @@ function SettingsView({ onLogout }: { onLogout: () => void }) {
         <h2 className="mb-4 text-sm font-medium">Profile</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Name">
-            <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
+            <input value={user.displayName} readOnly className={`${inputClass} bg-neutral-50`} />
           </Field>
           <Field label="Email">
-            <input value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} />
+            <input value={user.email} readOnly className={`${inputClass} bg-neutral-50`} />
           </Field>
         </div>
-        <button
-          onClick={() => toast.success("Profile saved")}
-          className="mt-4 rounded-lg bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-neutral-700"
-        >
-          Save changes
-        </button>
+        <p className="mt-3 text-xs text-neutral-400">From your account on the API.</p>
       </Card>
 
       <Card className="p-5">
@@ -713,14 +810,30 @@ function SettingsView({ onLogout }: { onLogout: () => void }) {
               <p className="text-sm">Click alerts</p>
               <p className="text-xs text-neutral-400">Get notified when a link spikes in traffic.</p>
             </div>
-            <Toggle on={notifications} onChange={() => setNotifications((v) => !v)} />
+            <Toggle
+              on={notifications}
+              onChange={() => {
+                setNotifications((v) => {
+                  localStorage.setItem("snip_pref_alerts", v ? "off" : "on");
+                  return !v;
+                });
+              }}
+            />
           </div>
           <div className="flex items-center justify-between py-3.5">
             <div>
               <p className="text-sm">Weekly digest</p>
               <p className="text-xs text-neutral-400">A summary of your top links, every Monday.</p>
             </div>
-            <Toggle on={weeklyDigest} onChange={() => setWeeklyDigest((v) => !v)} />
+            <Toggle
+              on={weeklyDigest}
+              onChange={() => {
+                setWeeklyDigest((v) => {
+                  localStorage.setItem("snip_pref_digest", v ? "off" : "on");
+                  return !v;
+                });
+              }}
+            />
           </div>
         </div>
       </Card>
@@ -735,43 +848,152 @@ function SettingsView({ onLogout }: { onLogout: () => void }) {
   );
 }
 
-// ─── App ────────────────────────────────────────────────────────────────────
+// ─── App shell ──────────────────────────────────────────────────────────────
 
-function Shell({ onLogout }: { onLogout: () => void }) {
+function Shell({ user, onLogout }: { user: ApiUser; onLogout: () => void }) {
   const [view, setView] = useState<View>("dashboard");
-  const [links, setLinks] = useState<ShortLink[]>(INITIAL_LINKS);
+  const [links, setLinks] = useState<ShortLink[]>([]);
+  const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
+  const [query, setQuery] = useState("");
   const [showModal, setShowModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState("");
+  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const shortBase = useMemo(() => {
+    const first = links[0]?.shortUrl;
+    if (!first) return "localhost:8080";
+    return first.replace(/^https?:\/\//, "").replace(/\/[^/]*$/, "");
+  }, [links]);
+
+  const loadLinks = useCallback(async (search: string) => {
+    const page = await listLinks(search);
+    setLinks(page.items.map(toUiLink));
+    setTotal(page.total);
+  }, []);
+
+  const loadSummary = useCallback(async () => {
+    setSummary(await analyticsSummary());
+  }, []);
+
+  const reload = useCallback(async () => {
+    setApiError("");
+    try {
+      await Promise.all([loadLinks(query), loadSummary()]);
+    } catch {
+      setApiError("Can't reach the API. Is the backend running? (dotnet run --project src/Snip.Api)");
+    } finally {
+      setLoading(false);
+    }
+  }, [loadLinks, loadSummary, query]);
+
+  useEffect(() => {
+    reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (loading) return;
+    if (debounce.current) clearTimeout(debounce.current);
+    debounce.current = setTimeout(() => {
+      loadLinks(query).catch(() => toast.error("Search failed — is the API running?"));
+    }, 300);
+    return () => {
+      if (debounce.current) clearTimeout(debounce.current);
+    };
+  }, [query, loadLinks, loading]);
+
+  const handleCreate = useCallback(
+    async (url: string, slug: string) => {
+      const created = await createLink(url, slug || undefined);
+      toast.success(`Created ${displayShort(toUiLink(created))}`);
+      await Promise.all([loadLinks(query), loadSummary()]);
+    },
+    [loadLinks, loadSummary, query]
+  );
+
+  const handleToggle = useCallback(
+    async (link: ShortLink) => {
+      const next = !link.active;
+      setLinks((prev) => prev.map((l) => (l.id === link.id ? { ...l, active: next } : l)));
+      try {
+        const updated = await setLinkActive(link.id, next);
+        setLinks((prev) => prev.map((l) => (l.id === link.id ? toUiLink(updated) : l)));
+        loadSummary().catch(() => {});
+      } catch {
+        setLinks((prev) => prev.map((l) => (l.id === link.id ? { ...l, active: !next } : l)));
+        toast.error("Could not update the link.");
+      }
+    },
+    [loadSummary]
+  );
+
+  const handleDelete = useCallback(
+    async (link: ShortLink) => {
+      try {
+        await deleteLink(link.id);
+        setLinks((prev) => prev.filter((l) => l.id !== link.id));
+        setTotal((t) => Math.max(0, t - 1));
+        loadSummary().catch(() => {});
+        toast.success("Link deleted");
+      } catch {
+        toast.error("Could not delete the link.");
+      }
+    },
+    [loadSummary]
+  );
 
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
-      <TopNav view={view} setView={setView} onLogout={onLogout} />
+      <TopNav view={view} setView={setView} user={user} onLogout={onLogout} />
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-        {view === "dashboard" && (
-          <DashboardView links={links} goLinks={() => setView("links")} onNewLink={() => setShowModal(true)} />
+        {apiError ? (
+          <Card className="p-8 text-center">
+            <p className="text-sm font-medium text-neutral-800">{apiError}</p>
+            <button
+              onClick={reload}
+              className="mt-4 rounded-lg bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-neutral-700"
+            >
+              Retry
+            </button>
+          </Card>
+        ) : loading ? (
+          <p className="py-16 text-center text-sm text-neutral-400">Loading your links…</p>
+        ) : (
+          <>
+            {view === "dashboard" && (
+              <DashboardView
+                links={links}
+                summary={summary}
+                goLinks={() => setView("links")}
+                onNewLink={() => setShowModal(true)}
+              />
+            )}
+            {view === "links" && (
+              <LinksView
+                links={links}
+                total={total}
+                query={query}
+                setQuery={setQuery}
+                showModal={showModal}
+                setShowModal={setShowModal}
+                shortBase={shortBase}
+                onCreate={handleCreate}
+                onToggle={handleToggle}
+                onDelete={handleDelete}
+              />
+            )}
+            {view === "analytics" && <AnalyticsView />}
+            {view === "settings" && <SettingsView user={user} onLogout={onLogout} />}
+          </>
         )}
-        {view === "links" && (
-          <LinksView links={links} setLinks={setLinks} showModal={showModal} setShowModal={setShowModal} />
-        )}
-        {view === "analytics" && <AnalyticsView />}
-        {view === "settings" && <SettingsView onLogout={onLogout} />}
       </main>
-      {showModal && view !== "links" && (
+      {showModal && view !== "links" && !apiError && (
         <NewLinkModal
+          shortBase={shortBase}
           onClose={() => setShowModal(false)}
-          onCreate={(url, slug) => {
-            setLinks((prev) => [
-              {
-                id: Date.now(),
-                slug,
-                originalUrl: url,
-                clicks: 0,
-                created: new Date().toISOString().split("T")[0],
-                active: true,
-              },
-              ...prev,
-            ]);
-            toast.success(`Created ${DOMAIN}/${slug}`);
-          }}
+          onCreate={handleCreate}
         />
       )}
     </div>
@@ -779,11 +1001,50 @@ function Shell({ onLogout }: { onLogout: () => void }) {
 }
 
 export default function App() {
-  const [isAuth, setIsAuth] = useState(false);
+  const [user, setUser] = useState<ApiUser | null>(() => getStoredUser());
+  const [booting, setBooting] = useState(() => !!getToken());
+
+  useEffect(() => {
+    if (!getToken()) {
+      setBooting(false);
+      return;
+    }
+    let cancelled = false;
+    fetchMe()
+      .then((u) => {
+        if (!cancelled) setUser(u);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          clearSession();
+          setUser(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setBooting(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleLogout = () => {
+    clearSession();
+    setUser(null);
+  };
+
   return (
     <>
       <Toaster position="bottom-right" />
-      {isAuth ? <Shell onLogout={() => setIsAuth(false)} /> : <AuthScreen onAuth={() => setIsAuth(true)} />}
+      {booting ? (
+        <div className="flex min-h-screen items-center justify-center bg-neutral-50">
+          <Brand size={40} />
+        </div>
+      ) : user ? (
+        <Shell user={user} onLogout={handleLogout} />
+      ) : (
+        <AuthScreen onAuth={setUser} />
+      )}
     </>
   );
 }

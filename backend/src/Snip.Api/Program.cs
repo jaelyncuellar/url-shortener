@@ -59,6 +59,12 @@ builder.Services.AddRateLimiter(options =>
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 });
 
+// ─── CORS: the web UI is served from a different origin ────────────────
+// Bearer tokens travel in the Authorization header (no cookies), so a
+// permissive policy is safe for this app.
+builder.Services.AddCors(options =>
+    options.AddPolicy("web", p => p.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -76,6 +82,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseCors("web");
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();

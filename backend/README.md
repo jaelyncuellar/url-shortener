@@ -94,6 +94,14 @@ The seeder creates a demo account matching the frontend demo:
 | GET | `/api/analytics/summary` | JWT | Totals + top 5 links |
 | GET | `/api/analytics/clicks?days=30` | JWT | Daily click counts |
 
+## Benchmark
+
+Redirect latency, cache-aside Redis vs Postgres-only, measured under
+concurrent load (50 clients, 1,000 requests per arm): mean latency dropped
+from ~74 ms to ~18 ms (~75%), with ~2.9× the throughput. Method, full
+results, and caveats: [BENCHMARK.md](BENCHMARK.md) — reproduce with
+`loadtest.py` in this folder.
+
 ## Migrations
 
 ```bash

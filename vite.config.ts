@@ -14,4 +14,11 @@ export default defineConfig({
     },
   },
   assetsInclude: ['**/*.svg', '**/*.csv'],
+  server: {
+    // The UI calls "/api/..." on its own origin; forward those calls to the
+    // ASP.NET Core API (backend/) running on port 8080.
+    proxy: {
+      '/api': 'http://localhost:8080',
+    },
+  },
 })

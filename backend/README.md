@@ -1,4 +1,4 @@
-# Snip API — URL Shortener Backend
+# Snip API - URL Shortener Backend
 
 ASP.NET Core 8 Web API for the Snip URL shortener. PostgreSQL for durable
 storage, Redis as a cache-aside layer on the redirect hot path, JWT bearer
@@ -28,7 +28,7 @@ asynchronously.
 **Redirect** `GET /{slug}` (public, rate-limited to 120 req/min)
 1. Look up the slug in Redis.
 2. On a miss, query PostgreSQL (unique index on `slug`), then populate Redis (1h TTL).
-3. Enqueue a click record on a bounded in-memory channel — the 302 goes back
+3. Enqueue a click record on a bounded in-memory channel - the 302 goes back
    immediately without waiting on analytics I/O.
 4. A `BackgroundService` drains the queue in batches, bulk-inserts click
    events, and bumps the denormalized click counters.
@@ -75,7 +75,7 @@ The seeder creates a demo account matching the frontend demo:
 |---|---|---|
 | `ConnectionStrings__Default` | Postgres connection string | docker-compose default works out of the box |
 | `ConnectionStrings__Redis` | Redis connection string | |
-| `Jwt__Key` | Signing key | Dev default lives in `appsettings.Development.json` — **replace in production** |
+| `Jwt__Key` | Signing key | Dev default lives in `appsettings.Development.json` - **replace in production** |
 | `App__BaseUrl` | Public base URL | Used to build short URLs in API responses |
 
 ## API reference

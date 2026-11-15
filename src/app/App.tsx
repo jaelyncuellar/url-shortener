@@ -176,7 +176,7 @@ function AuthScreen({ onAuth }: { onAuth: (user: ApiUser) => void }) {
         mode === "login"
           ? await login(email.trim(), password)
           : await register(email.trim(), password, name.trim());
-      toast.success(mode === "login" ? "Signed in - welcome back" : "Account created - welcome");
+      toast.success(mode === "login" ? "Signed in — welcome back" : "Account created — welcome");
       onAuth(user);
     } catch (err) {
       setError(
@@ -280,7 +280,7 @@ function AuthScreen({ onAuth }: { onAuth: (user: ApiUser) => void }) {
               {" · "}
               <span className="font-mono">{DEMO_PASSWORD}</span>
             </p>
-            <p className="mt-1 text-xs text-neutral-400">It's already filled in - just hit sign in.</p>
+            <p className="mt-1 text-xs text-neutral-400">It's already filled in — just hit sign in.</p>
           </div>
         )}
       </div>
@@ -433,7 +433,7 @@ function DashboardView({
             ))}
           {links.length === 0 && (
             <p className="px-5 py-8 text-center text-sm text-neutral-400">
-              No links yet - create your first one.
+              No links yet — create your first one.
             </p>
           )}
         </div>
@@ -642,7 +642,7 @@ function LinksView({
             ))}
             {links.length === 0 && (
               <p className="px-5 py-12 text-center text-sm text-neutral-400">
-                {query ? `No links match "${query}".` : "No links yet - create your first one."}
+                {query ? `No links match "${query}".` : "No links yet — create your first one."}
               </p>
             )}
           </div>
@@ -897,7 +897,7 @@ function Shell({ user, onLogout }: { user: ApiUser; onLogout: () => void }) {
     if (loading) return;
     if (debounce.current) clearTimeout(debounce.current);
     debounce.current = setTimeout(() => {
-      loadLinks(query).catch(() => toast.error("Search failed - is the API running?"));
+      loadLinks(query).catch(() => toast.error("Search failed — is the API running?"));
     }, 300);
     return () => {
       if (debounce.current) clearTimeout(debounce.current);

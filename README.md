@@ -7,7 +7,7 @@ browse simple analytics.
 
 ## Walkthrough
 
-[▶ Watch the walkthrough (36s)](docs/walkthrough.mp4) - sign in with the demo account, shorten a long URL, and tour the dashboard, links, and analytics.
+[▶ Watch the walkthrough (29s)](docs/walkthrough.mp4) - sign in with the demo account, shorten a long URL, and tour the dashboard, links, and analytics.
 
 [![Watch the video walkthrough](docs/walkthrough-poster.png)](docs/walkthrough.mp4)
 

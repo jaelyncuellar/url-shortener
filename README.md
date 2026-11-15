@@ -3,6 +3,12 @@
 A minimal, clean demo of a URL shortener. Shorten links, track clicks, and
 browse simple analytics.
 
+## Walkthrough
+
+[▶ Watch the walkthrough (36s)](docs/walkthrough.mp4) - sign in with the demo account, shorten a long URL, and tour the dashboard, links, and analytics.
+
+[![Watch the video walkthrough](docs/walkthrough-poster.png)](docs/walkthrough.mp4)
+
 ## Demo login
 
 The login form is pre-filled with the demo account - just hit **Sign in**:

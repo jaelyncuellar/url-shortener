@@ -1,8 +1,8 @@
-# Redirect latency benchmark — Redis cache-aside vs Postgres lookup
+# Redirect latency benchmark - Redis cache-aside vs Postgres lookup
 
 Run 2026-11-02 on a single small cloud VM (load client, API, PostgreSQL 16
 and Redis 7 all on the same box, loopback). Code: this `backend/` copied to
-a bench folder with ONE local-only change — the redirect rate limit raised
+a bench folder with ONE local-only change - the redirect rate limit raised
 from 120/min to effectively unlimited, because the shipped default would
 throttle (429) any load test. The shipped code was not modified.
 
@@ -19,7 +19,7 @@ throttle (429) any load test. The shipped code was not modified.
   followed (measures the API's own 302 response time).
 - Two full rounds with disjoint slug sets, plus repeats.
 
-## Results — concurrent load (50 threads, 1,000 requests per arm)
+## Results - concurrent load (50 threads, 1,000 requests per arm)
 
 | Arm | Mean | p50 | p95 | Throughput |
 |---|---|---|---|---|
@@ -36,7 +36,7 @@ One hit round transiently read at miss-level latency (mean 71.8 ms) during a
 VM load spike; the immediate re-run (17.7 ms) confirmed it was environment
 noise, and it is excluded from the averages above.
 
-## Results — sequential (one request at a time, 20 requests per arm, curl)
+## Results - sequential (one request at a time, 20 requests per arm, curl)
 
 | Arm | Min | Median | Max |
 |---|---|---|---|
@@ -48,7 +48,7 @@ noise, and it is excluded from the averages above.
 
 ## Verdict on the resume bullet
 
-"Redis caching reduced latency ~40% under concurrent load" — **supported,
+"Redis caching reduced latency ~40% under concurrent load" - **supported,
 and conservative.** Measured reduction was ~75% (mean) under 50-client
 concurrent load in this environment. Absolute numbers are specific to this
 small shared VM; the relative gap is the meaningful figure. In a deployed

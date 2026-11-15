@@ -1,7 +1,7 @@
 // API client for the Snip backend (ASP.NET Core API in /backend).
 //
 // In dev, requests go to the same origin ("/api/...") and the Vite dev
-// server proxies them to the API on http://localhost:8080 — see
+// server proxies them to the API on http://localhost:8080 - see
 // vite.config.ts. Set VITE_API_BASE to call a deployed API directly.
 
 const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
@@ -75,7 +75,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   });
 
   if (res.status === 401 && token) {
-    // Session expired or token rejected — force a fresh sign-in.
+    // Session expired or token rejected - force a fresh sign-in.
     clearSession();
   }
   if (!res.ok) {

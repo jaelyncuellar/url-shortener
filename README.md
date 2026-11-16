@@ -48,3 +48,11 @@ the measured Redis-vs-Postgres redirect latency (~75% lower mean latency
 under concurrent load).
 
 The backend seeds the demo account (`test@gmail.com` / `test`).
+
+## Portfolio media
+
+The [case study on jaelyncuellar.com](https://jaelyncuellar.com/projects/url-shortener) uses web versions of the cover and walkthrough poster above. Those exact files are kept here so the GitHub and portfolio visuals match. The walkthrough video itself is already the same file in both places: `docs/walkthrough.mp4`.
+
+![Snip cover - portfolio version](docs/portfolio/url-shortener.webp)
+
+![Walkthrough poster - portfolio version](docs/portfolio/walkthrough-poster.webp)
